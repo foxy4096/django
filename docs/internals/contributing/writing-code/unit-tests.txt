@@ -278,7 +278,7 @@ dependencies:
 
 *  aiosmtpd_
 *  argon2-cffi_ 19.1.0+
-*  asgiref_ 3.4.1+ (required)
+*  asgiref_ 3.5.2+ (required)
 *  bcrypt_
 *  colorama_
 *  docutils_
@@ -564,7 +564,7 @@ Since this pattern involves a lot of boilerplate, Django provides the
     installed, you should pass the set of targeted ``app_label`` as arguments:
 
     .. code-block:: python
-        :caption: tests/app_label/tests.py
+        :caption: ``tests/app_label/tests.py``
 
         from django.db import models
         from django.test import SimpleTestCase

@@ -128,6 +128,10 @@ class ASGIRequest(HttpRequest):
     def COOKIES(self):
         return parse_cookie(self.META.get("HTTP_COOKIE", ""))
 
+    def close(self):
+        super().close()
+        self._stream.close()
+
 
 class ASGIHandler(base.BaseHandler):
     """Handler for ASGI requests."""
@@ -171,6 +175,7 @@ class ASGIHandler(base.BaseHandler):
         # Get the request and check for basic issues.
         request, error_response = self.create_request(scope, body_file)
         if request is None:
+            body_file.close()
             await self.send_response(error_response, send)
             return
         # Get the response, using the async mode of BaseHandler.
@@ -192,6 +197,7 @@ class ASGIHandler(base.BaseHandler):
         while True:
             message = await receive()
             if message["type"] == "http.disconnect":
+                body_file.close()
                 # Early client disconnect.
                 raise RequestAborted()
             # Add a body chunk from the message, if provided.

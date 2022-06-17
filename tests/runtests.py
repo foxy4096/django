@@ -11,7 +11,6 @@ import subprocess
 import sys
 import tempfile
 import warnings
-from functools import partial
 from pathlib import Path
 
 try:
@@ -26,10 +25,13 @@ else:
     from django.core.exceptions import ImproperlyConfigured
     from django.db import connection, connections
     from django.test import TestCase, TransactionTestCase
-    from django.test.runner import _init_worker, get_max_test_processes, parallel_type
+    from django.test.runner import get_max_test_processes, parallel_type
     from django.test.selenium import SeleniumTestCaseBase
     from django.test.utils import NullTimeKeeper, TimeKeeper, get_runner
-    from django.utils.deprecation import RemovedInDjango50Warning
+    from django.utils.deprecation import (
+        RemovedInDjango50Warning,
+        RemovedInDjango51Warning,
+    )
     from django.utils.log import DEFAULT_LOGGING
 
 try:
@@ -42,6 +44,7 @@ else:
 
 # Make deprecation warnings errors to ensure no usage of deprecated features.
 warnings.simplefilter("error", RemovedInDjango50Warning)
+warnings.simplefilter("error", RemovedInDjango51Warning)
 # Make resource and runtime warning errors to ensure no usage of error prone
 # patterns.
 warnings.simplefilter("error", ResourceWarning)
@@ -243,6 +246,9 @@ def setup_collect_tests(start_at, start_after, test_labels=None):
         "fields.W342",  # ForeignKey(unique=True) -> OneToOneField
     ]
 
+    # RemovedInDjango50Warning
+    settings.FORM_RENDERER = "django.forms.renderers.DjangoDivFormRenderer"
+
     # Load all the ALWAYS_INSTALLED_APPS.
     django.setup()
 
@@ -398,11 +404,8 @@ def django_tests(
             parallel = 1
 
     TestRunner = get_runner(settings)
-    TestRunner.parallel_test_suite.init_worker = partial(
-        _init_worker,
-        process_setup=setup_run_tests,
-        process_setup_args=process_setup_args,
-    )
+    TestRunner.parallel_test_suite.process_setup = setup_run_tests
+    TestRunner.parallel_test_suite.process_setup_args = process_setup_args
     test_runner = TestRunner(
         verbosity=verbosity,
         interactive=interactive,

@@ -2,6 +2,7 @@ import copy
 import datetime
 import functools
 import inspect
+import warnings
 from collections import defaultdict
 from decimal import Decimal
 from uuid import UUID
@@ -12,6 +13,7 @@ from django.db.models import fields
 from django.db.models.constants import LOOKUP_SEP
 from django.db.models.query_utils import Q
 from django.utils.deconstruct import deconstructible
+from django.utils.deprecation import RemovedInDjango50Warning
 from django.utils.functional import cached_property
 from django.utils.hashable import make_hashable
 
@@ -387,8 +389,32 @@ class BaseExpression:
         )
         return clone
 
+    def replace_references(self, references_map):
+        clone = self.copy()
+        clone.set_source_expressions(
+            [
+                references_map.get(expr.name, expr)
+                if isinstance(expr, F)
+                else expr.replace_references(references_map)
+                for expr in self.get_source_expressions()
+            ]
+        )
+        return clone
+
     def copy(self):
         return copy.copy(self)
+
+    def prefix_references(self, prefix):
+        clone = self.copy()
+        clone.set_source_expressions(
+            [
+                F(f"{prefix}{expr.name}")
+                if isinstance(expr, F)
+                else expr.prefix_references(prefix)
+                for expr in self.get_source_expressions()
+            ]
+        )
+        return clone
 
     def get_group_by_cols(self, alias=None):
         if not self.contains_aggregate:
@@ -1489,11 +1515,20 @@ class OrderBy(Expression):
     template = "%(expression)s %(ordering)s"
     conditional = False
 
-    def __init__(
-        self, expression, descending=False, nulls_first=False, nulls_last=False
-    ):
+    def __init__(self, expression, descending=False, nulls_first=None, nulls_last=None):
         if nulls_first and nulls_last:
             raise ValueError("nulls_first and nulls_last are mutually exclusive")
+        if nulls_first is False or nulls_last is False:
+            # When the deprecation ends, replace with:
+            # raise ValueError(
+            #     "nulls_first and nulls_last values must be True or None."
+            # )
+            warnings.warn(
+                "Passing nulls_first=False or nulls_last=False is deprecated, use None "
+                "instead.",
+                RemovedInDjango50Warning,
+                stacklevel=2,
+            )
         self.nulls_first = nulls_first
         self.nulls_last = nulls_last
         self.descending = descending
@@ -1560,9 +1595,12 @@ class OrderBy(Expression):
 
     def reverse_ordering(self):
         self.descending = not self.descending
-        if self.nulls_first or self.nulls_last:
-            self.nulls_first = not self.nulls_first
-            self.nulls_last = not self.nulls_last
+        if self.nulls_first:
+            self.nulls_last = True
+            self.nulls_first = None
+        elif self.nulls_last:
+            self.nulls_first = True
+            self.nulls_last = None
         return self
 
     def asc(self):

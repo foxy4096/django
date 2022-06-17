@@ -39,6 +39,13 @@ class DatabaseFeatures(BaseDatabaseFeatures):
             SET V_I = P_I;
         END;
     """
+    create_test_table_with_composite_primary_key = """
+        CREATE TABLE test_table_composite_pk (
+            column_1 INTEGER NOT NULL,
+            column_2 INTEGER NOT NULL,
+            PRIMARY KEY(column_1, column_2)
+        )
+    """
     # Neither MySQL nor MariaDB support partial indexes.
     supports_partial_indexes = False
     # COLLATE must be wrapped in parentheses because MySQL treats COLLATE as an
@@ -52,17 +59,14 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     @cached_property
     def minimum_database_version(self):
         if self.connection.mysql_is_mariadb:
-            return (10, 2)
+            return (10, 4)
         else:
             return (5, 7)
 
     @cached_property
     def bare_select_suffix(self):
-        if (
-            self.connection.mysql_is_mariadb and self.connection.mysql_version < (10, 4)
-        ) or (
-            not self.connection.mysql_is_mariadb
-            and self.connection.mysql_version < (8,)
+        if not self.connection.mysql_is_mariadb and self.connection.mysql_version < (
+            8,
         ):
             return " FROM DUAL"
         return ""
@@ -104,6 +108,12 @@ class DatabaseFeatures(BaseDatabaseFeatures):
             "MySQL supports multiplying and dividing DurationFields by a "
             "scalar value but it's not implemented (#25287).": {
                 "expressions.tests.FTimeDeltaTests.test_durationfield_multiply_divide",
+            },
+            "UPDATE ... ORDER BY syntax on MySQL/MariaDB does not support ordering by"
+            "related fields.": {
+                "update.tests.AdvancedTests."
+                "test_update_ordered_by_inline_m2m_annotation",
+                "update.tests.AdvancedTests.test_update_ordered_by_m2m_annotation",
             },
         }
         if "ONLY_FULL_GROUP_BY" in self.connection.sql_mode:
@@ -254,8 +264,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     @cached_property
     def can_introspect_check_constraints(self):
         if self.connection.mysql_is_mariadb:
-            version = self.connection.mysql_version
-            return version >= (10, 3, 10)
+            return True
         return self.connection.mysql_version >= (8, 0, 16)
 
     @cached_property
@@ -344,3 +353,9 @@ class DatabaseFeatures(BaseDatabaseFeatures):
             and self._mysql_storage_engine != "MyISAM"
             and self.connection.mysql_version >= (8, 0, 13)
         )
+
+    @cached_property
+    def can_rename_index(self):
+        if self.connection.mysql_is_mariadb:
+            return self.connection.mysql_version >= (10, 5, 2)
+        return True
